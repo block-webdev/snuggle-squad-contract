@@ -1,7 +1,13 @@
 [features]
 seeds = false
 [programs.localnet]
-snug_squad = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+snug_squad = "5ALT7PNwdVzuMLAMCPvK84s4ZbR8qefihfNC92jV12Pg"
+
+[programs.devnet]
+snug_squad = "5ALT7PNwdVzuMLAMCPvK84s4ZbR8qefihfNC92jV12Pg"
+
+[programs.mainnet]
+snug_squad = "5ALT7PNwdVzuMLAMCPvK84s4ZbR8qefihfNC92jV12Pg"
 
 [registry]
 url = "https://anchor.projectserum.com"
