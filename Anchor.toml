@@ -13,7 +13,7 @@ snug_squad = "5ALT7PNwdVzuMLAMCPvK84s4ZbR8qefihfNC92jV12Pg"
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "/root/.config/solana/id.json"
 
 [scripts]

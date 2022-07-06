@@ -21,7 +21,8 @@ pub mod snug_squad {
 
     pub fn initialize(ctx: Context<Initialize>,
         reward_policy_by_class: [u16; CLASS_TYPES],
-        lock_day_by_class: [u16; CLASS_TYPES],) -> Result<()> {
+        lock_day_by_class: [u16; CLASS_TYPES],
+        reward_by_rarity: [u16; RARITY_TYPES],) -> Result<()> {
         msg!("initializing");
 
         let pool_account = &mut ctx.accounts.pool_account;
@@ -35,6 +36,7 @@ pub mod snug_squad {
         pool_account.staked_nft = 0;
         pool_account.lock_day_by_class = lock_day_by_class;
         pool_account.reward_policy_by_class = reward_policy_by_class;
+        pool_account.reward_by_rarity = reward_by_rarity;
 
         Ok(())
     }
@@ -215,6 +217,7 @@ pub mod snug_squad {
         ctx: Context<ChangePoolSetting>,
         reward_policy_by_class: [u16; CLASS_TYPES],
         lock_day_by_class: [u16; CLASS_TYPES],
+        reward_by_rarity: [u16; RARITY_TYPES],
         paused: bool,
     ) -> Result<()> {
         let pool_account = &mut ctx.accounts.pool_account;
@@ -222,6 +225,7 @@ pub mod snug_squad {
         pool_account.last_update_time = Clock::get()?.unix_timestamp;
         pool_account.lock_day_by_class = lock_day_by_class;
         pool_account.reward_policy_by_class = reward_policy_by_class;
+        pool_account.reward_by_rarity = reward_by_rarity;
         Ok(())
     }
 
