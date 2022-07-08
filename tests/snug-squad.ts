@@ -32,8 +32,8 @@ describe("snug-squad", () => {
   let user_reward_account = null;
   let funder_vault_account = null;
 
-  let initial_reward_vault_amount = 1_000_000_000;
-  let deposit_amount = 100_000_000;
+  let initial_reward_vault_amount = 100_000_000_000_000;
+  let deposit_amount = 100_000_000_000;
   let class_types = [
     10,
     15,
@@ -41,6 +41,13 @@ describe("snug-squad", () => {
   ];
   let lock_day_by_class = [
     0,
+    14,
+    30,
+  ];
+  let reward_by_class = [
+    0,
+    14,
+    30,
     14,
     30,
   ];
@@ -151,7 +158,7 @@ describe("snug-squad", () => {
 
     console.log("vault_key =", vault_pda.toBase58());
 
-    const res = await program.methods.initialize(class_types, lock_day_by_class).accounts({
+    const res = await program.methods.initialize(class_types, lock_day_by_class, reward_by_class).accounts({
       admin: superOwner.publicKey,
       poolAccount: pool_account_pda,
       rewardMint: reward_mint.publicKey,
@@ -281,6 +288,8 @@ describe("snug-squad", () => {
       program.programId
     );
 
+    let _user_reward_account = await reward_mint.getAccountInfo(user_reward_account);
+    console.log("reward amount1111: ", Number(_user_reward_account.amount));
     const ix = await program.methods.claimReward().accounts({
       owner: user.publicKey,
       poolAccount: pool_account_pda,
@@ -298,8 +307,8 @@ describe("snug-squad", () => {
       .rpc();
     console.log("Your transaction signature", ix);
 
-    let _user_reward_account = await reward_mint.getAccountInfo(user_reward_account);
-    console.log("reward amount: ", Number(_user_reward_account.amount));
+    _user_reward_account = await reward_mint.getAccountInfo(user_reward_account);
+    console.log("reward amount2222: ", _user_reward_account.amount.toString());
 
   })
 

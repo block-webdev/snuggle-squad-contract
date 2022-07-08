@@ -13,7 +13,7 @@ use account::*;
 use constants::*;
 use error::*;
 
-declare_id!("5ALT7PNwdVzuMLAMCPvK84s4ZbR8qefihfNC92jV12Pg");
+declare_id!("GoJnhkH2tA9spno267RRLGszcyaDQUtd9vznvrUdY34U");
 
 #[program]
 pub mod snug_squad {
@@ -111,22 +111,22 @@ pub mod snug_squad {
         let transfer_ctx = CpiContext::new_with_signer(token_program, cpi_accounts, signer);
         token::transfer(transfer_ctx, 1)?;
 
-        if reward > 0 {
-            let token_accounts = anchor_spl::token::Transfer {
-                from: ctx.accounts.reward_vault.to_account_info().clone(),
-                to: ctx.accounts.reward_to_account.to_account_info().clone(),
-                authority: ctx.accounts.pool_account.to_account_info().clone(),
-            };
-            let cpi_ctx = CpiContext::new(
-                ctx.accounts.token_program.to_account_info().clone(),
-                token_accounts,
-            );
-            msg!(
-                "Calling the token program to transfer reward {} to the user",
-                reward
-            );
-            anchor_spl::token::transfer(cpi_ctx.with_signer(signer), reward)?;
-        }
+        // if reward > 0 {
+        //     let token_accounts = anchor_spl::token::Transfer {
+        //         from: ctx.accounts.reward_vault.to_account_info().clone(),
+        //         to: ctx.accounts.reward_to_account.to_account_info().clone(),
+        //         authority: ctx.accounts.pool_account.to_account_info().clone(),
+        //     };
+        //     let cpi_ctx = CpiContext::new(
+        //         ctx.accounts.token_program.to_account_info().clone(),
+        //         token_accounts,
+        //     );
+        //     msg!(
+        //         "Calling the token program to transfer reward {} to the user",
+        //         reward
+        //     );
+        //     anchor_spl::token::transfer(cpi_ctx.with_signer(signer), reward)?;
+        // }
         Ok(())
     }
 
@@ -170,7 +170,7 @@ pub mod snug_squad {
         Ok(())
     }
 
-    pub fn deposit_swrd(ctx: Context<DepositSwrd>, amount: u64) -> Result<()> {
+    pub fn deposit_reward(ctx: Context<DepositReward>, amount: u64) -> Result<()> {
         // Transfer reward tokens into the vault.
         let cpi_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -186,7 +186,7 @@ pub mod snug_squad {
         Ok(())
     }
 
-    pub fn withdraw_swrd(ctx: Context<WithdrawSwrd>) -> Result<()> {
+    pub fn withdraw_reward(ctx: Context<WithdrawReward>) -> Result<()> {
         let vault_amount = ctx.accounts.reward_vault.amount;
 
         if vault_amount > 0 {
@@ -441,7 +441,7 @@ pub struct ClaimReward<'info> {
 }
 
 #[derive(Accounts)]
-pub struct DepositSwrd<'info> {
+pub struct DepositReward<'info> {
     #[account(mut)]
     funder: Signer<'info>,
 
@@ -472,7 +472,7 @@ pub struct DepositSwrd<'info> {
 }
 
 #[derive(Accounts)]
-pub struct WithdrawSwrd<'info> {
+pub struct WithdrawReward<'info> {
     #[account(mut)]
     admin: Signer<'info>,
     #[account(
