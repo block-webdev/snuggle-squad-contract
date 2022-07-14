@@ -374,6 +374,16 @@ describe("snug-squad", () => {
       .rpc();
     console.log("Your transaction signature", ix);
 
+    provider.connection.confirmTransaction(
+      await Token.createCloseAccountInstruction(
+          TOKEN_PROGRAM_ID,
+          stake_info_pda, // to be closed token account
+          user.publicKey, // rent's destination
+          user.publicKey, // token account authority
+          [user] // multisig
+        )
+    );
+
     _user_reward_account = await reward_mint.getAccountInfo(user_reward_account);
     console.log("reward amount2222: ", _user_reward_account.amount.toString());
 

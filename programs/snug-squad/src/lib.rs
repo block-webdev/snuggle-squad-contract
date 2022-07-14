@@ -121,6 +121,7 @@ pub mod snug_squad {
 
         if staking_info.is_unstaked == 1 {
             reward = staking_info.reward;
+            staking_info.is_unstaked = 0;
         } else {
             let vault_balance = ctx.accounts.reward_vault.amount;
             if vault_balance < reward {

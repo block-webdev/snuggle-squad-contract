@@ -45,6 +45,7 @@ pub struct StakeInfo {
     pub rarity_id: u32, //4
     pub stake_time: i64, //8
     pub last_update_time: i64, //8
+    pub will_delete: u32, //4
     pub is_unstaked: u32, //4
     pub reward: u64, //8
 }
