@@ -4,6 +4,8 @@ use anchor_lang::prelude::*;
 pub enum StakingError {
     #[msg("Not Allowed Authority")]
     NotAllowedAuthority,
+    #[msg("Invalid Admin or User Address")]
+    InvalidAdminOrAddress,
     #[msg("Invalid User Address")]
     InvalidUserAddress,
     #[msg("Invalid pool number")]
@@ -18,4 +20,6 @@ pub enum StakingError {
     IndexOverflow,
     #[msg("Insufficient Lamports")]
     LackLamports,
+    #[msg("Not Unstaked")]
+    NotUnstaked,
 }

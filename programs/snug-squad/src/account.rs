@@ -39,12 +39,14 @@ impl PoolConfig {
 #[account]
 #[derive(Default)]
 pub struct StakeInfo {
-    pub class_id: u32,
-    pub owner: Pubkey,
-    pub nft_addr: Pubkey,
-    pub rarity_id: u32,
-    pub stake_time: i64,
-    pub last_update_time: i64,
+    pub class_id: u32, //4
+    pub owner: Pubkey, //32
+    pub nft_addr: Pubkey, //32
+    pub rarity_id: u32, //4
+    pub stake_time: i64, //8
+    pub last_update_time: i64, //8
+    pub is_unstaked: u32, //4
+    pub reward: u64, //8
 }
 
 impl StakeInfo {
@@ -69,7 +71,6 @@ impl StakeInfo {
         self.last_update_time = now;
 
         Ok(reward)
-        // return Ok(reward);
     }
 }
 

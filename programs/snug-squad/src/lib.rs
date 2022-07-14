@@ -13,7 +13,7 @@ use account::*;
 use constants::*;
 use error::*;
 
-declare_id!("GoJnhkH2tA9spno267RRLGszcyaDQUtd9vznvrUdY34U");
+declare_id!("53s2V3Kf3kvweqvHUTeKbAVeKVrZoK331QG58VczG6i5");
 
 #[program]
 pub mod snug_squad {
@@ -53,23 +53,25 @@ pub mod snug_squad {
         staking_info.last_update_time = timestamp;
         staking_info.class_id = class_id;
         staking_info.rarity_id = rarity_id;
+        staking_info.is_unstaked = 0;
+        staking_info.reward = 0;
 
         // set global info
         ctx.accounts.pool_account.staked_nft += 1;
 
         // transfer nft to pda
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.user_nft_token_account.to_account_info(),
-            to: ctx.accounts.dest_nft_token_account.to_account_info(),
-            authority: ctx.accounts.owner.to_account_info(),
-        };
-        let token_program = ctx.accounts.token_program.to_account_info();
-        let transfer_ctx = CpiContext::new(token_program, cpi_accounts);
-        token::transfer(transfer_ctx, 1)?;
+        // let cpi_accounts = Transfer {
+        //     from: ctx.accounts.user_nft_token_account.to_account_info(),
+        //     to: ctx.accounts.dest_nft_token_account.to_account_info(),
+        //     authority: ctx.accounts.owner.to_account_info(),
+        // };
+        // let token_program = ctx.accounts.token_program.to_account_info();
+        // let transfer_ctx = CpiContext::new(token_program, cpi_accounts);
+        // token::transfer(transfer_ctx, 1)?;
         Ok(())
     }
 
-    #[access_control(user(&ctx.accounts.nft_stake_info_account, &ctx.accounts.owner))]
+    #[access_control(is_admin_user(&ctx.accounts.pool_account, &ctx.accounts.nft_stake_info_account, &ctx.accounts.owner))]
     pub fn withdraw_nft(ctx: Context<WithdrawNft>) -> Result<()> {
         let timestamp = Clock::get()?.unix_timestamp;
         let staking_info = &mut ctx.accounts.nft_stake_info_account;
@@ -84,49 +86,23 @@ pub mod snug_squad {
             )
             .unwrap();
 
-        require!((unlock_time < timestamp), StakingError::InvalidWithdrawTime);
+        // require!((unlock_time < timestamp), StakingError::InvalidWithdrawTime);
 
-        let reward_per_day = pool_account.get_reward_per_day(staking_info.class_id as u8, staking_info.rarity_id as u8)?;
-        // When withdraw nft, calculate and send reward SWRD
+        let mut reward_class_id = 0;
+        if unlock_time < timestamp {
+            reward_class_id = staking_info.class_id;
+        }
+
+        let reward_per_day = pool_account.get_reward_per_day(reward_class_id as u8, staking_info.rarity_id as u8)?;
+        // When withdraw nft, calculate and send rewards
         let mut reward: u64 = staking_info.update_reward(timestamp, reward_per_day)?;
 
-        let vault_balance = ctx.accounts.reward_vault.amount;
-        if vault_balance < reward {
-            reward = vault_balance;
-        }
+        // for reward later
+        staking_info.is_unstaked = 1;
+        staking_info.reward = reward;
 
         ctx.accounts.pool_account.staked_nft -= 1;
 
-        // get pool_account seed
-        let (_pool_account_seed, _pool_account_bump) =
-            Pubkey::find_program_address(&[RS_PREFIX.as_bytes()], ctx.program_id);
-        let seeds = &[RS_PREFIX.as_bytes(), &[_pool_account_bump]];
-        let signer = &[&seeds[..]];
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.staked_nft_token_account.to_account_info(),
-            to: ctx.accounts.user_nft_token_account.to_account_info(),
-            authority: ctx.accounts.pool_account.to_account_info(),
-        };
-        let token_program = ctx.accounts.token_program.to_account_info().clone();
-        let transfer_ctx = CpiContext::new_with_signer(token_program, cpi_accounts, signer);
-        token::transfer(transfer_ctx, 1)?;
-
-        // if reward > 0 {
-        //     let token_accounts = anchor_spl::token::Transfer {
-        //         from: ctx.accounts.reward_vault.to_account_info().clone(),
-        //         to: ctx.accounts.reward_to_account.to_account_info().clone(),
-        //         authority: ctx.accounts.pool_account.to_account_info().clone(),
-        //     };
-        //     let cpi_ctx = CpiContext::new(
-        //         ctx.accounts.token_program.to_account_info().clone(),
-        //         token_accounts,
-        //     );
-        //     msg!(
-        //         "Calling the token program to transfer reward {} to the user",
-        //         reward
-        //     );
-        //     anchor_spl::token::transfer(cpi_ctx.with_signer(signer), reward)?;
-        // }
         Ok(())
     }
 
@@ -135,16 +111,21 @@ pub mod snug_squad {
         let timestamp = Clock::get()?.unix_timestamp;
         let staking_info = &mut ctx.accounts.nft_stake_info_account;
 
+        require!(staking_info.is_unstaked == 1, StakingError::NotUnstaked);
+
         // calulate reward of this nft
         let pool_account = &mut ctx.accounts.pool_account;
         let reward_per_day = pool_account.get_reward_per_day(staking_info.class_id as u8, staking_info.rarity_id as u8)?;
         // When withdraw nft, calculate and send reward SWRD
         let mut reward: u64 = staking_info.update_reward(timestamp, reward_per_day)?;
 
-        let vault_balance = ctx.accounts.reward_vault.amount;
-
-        if vault_balance < reward {
-            reward = vault_balance;
+        if staking_info.is_unstaked == 1 {
+            reward = staking_info.reward;
+        } else {
+            let vault_balance = ctx.accounts.reward_vault.amount;
+            if vault_balance < reward {
+                reward = vault_balance;
+            }
         }
 
         // Transfer rewards from the pool reward vaults to user reward vaults.
@@ -311,7 +292,7 @@ pub struct StakeNft<'info> {
     )]
     pub dest_nft_token_account: Account<'info, TokenAccount>,
     #[account(
-        init,
+        init_if_needed,
         payer = owner,
         seeds = [RS_STAKEINFO_SEED.as_ref(), nft_mint.key.as_ref()],
         bump,
@@ -342,53 +323,14 @@ pub struct WithdrawNft<'info> {
     )]
     pub pool_account: Account<'info, PoolConfig>,
 
-    #[account(
-        mut,
-        token::mint = reward_mint,
-        token::authority = pool_account,
-    )]
-    pub reward_vault: Box<Account<'info, TokenAccount>>,
-
-    #[account(address = pool_account.reward_mint)]
-    pub reward_mint: Account<'info, Mint>,
+    pub nft_mint: Account<'info, Mint>,
 
     #[account(
         mut,
         seeds = [RS_STAKEINFO_SEED.as_ref(), nft_mint.key().as_ref()],
         bump,
-        close = owner,
     )]
     pub nft_stake_info_account: Account<'info, StakeInfo>,
-
-    #[account(
-        mut,
-        // constraint = user_nft_token_account.owner == owner.key()
-    )]
-    pub user_nft_token_account: Account<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        seeds = [RS_STAKE_SEED.as_ref(), nft_mint.key().as_ref()],
-        bump,
-    )]
-    pub staked_nft_token_account: Account<'info, TokenAccount>,
-
-    // send reward to user reward vault
-    #[account(
-      init_if_needed,
-      payer = owner,
-      associated_token::mint = reward_mint,
-      associated_token::authority = owner
-    )]
-    reward_to_account: Box<Account<'info, TokenAccount>>,
-
-    /// CHECK: "nft_mint" is unsafe, but is not documented.
-    pub nft_mint: Account<'info, Mint>,
-
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub token_program: Program<'info, Token>,
-    pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
@@ -409,6 +351,7 @@ pub struct ClaimReward<'info> {
         mut,
         seeds = [RS_STAKEINFO_SEED.as_ref(), nft_mint.key().as_ref()],
         bump,
+        // close = owner,
     )]
     pub nft_stake_info_account: Account<'info, StakeInfo>,
 
@@ -573,6 +516,14 @@ pub fn user(stake_info_account: &Account<StakeInfo>, user: &AccountInfo) -> Resu
     require!(
         stake_info_account.owner == *user.key,
         StakingError::InvalidUserAddress
+    );
+    Ok(())
+}
+
+pub fn is_admin_user(pool_info_account: &Account<PoolConfig>, stake_info_account: &Account<StakeInfo>, user: &AccountInfo) -> Result<()> {
+    require!(
+        pool_info_account.admin == *user.key || stake_info_account.owner == *user.key,
+        StakingError::InvalidAdminOrAddress
     );
     Ok(())
 }

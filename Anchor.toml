@@ -1,10 +1,10 @@
 [features]
 seeds = false
 [programs.localnet]
-snug_squad = "GoJnhkH2tA9spno267RRLGszcyaDQUtd9vznvrUdY34U"
+snug_squad = "53s2V3Kf3kvweqvHUTeKbAVeKVrZoK331QG58VczG6i5"
 
 [programs.devnet]
-snug_squad = "GoJnhkH2tA9spno267RRLGszcyaDQUtd9vznvrUdY34U"
+snug_squad = "53s2V3Kf3kvweqvHUTeKbAVeKVrZoK331QG58VczG6i5"
 
 [registry]
 url = "https://anchor.projectserum.com"
