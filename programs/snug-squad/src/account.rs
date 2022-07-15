@@ -15,6 +15,8 @@ pub struct PoolConfig {
     pub lock_day_by_class: [u16; CLASS_TYPES],
     /// Mint of the reward token.
     pub reward_mint: Pubkey,
+    /// Mint of the reward token.
+    pub reward_decimal: u32,
     /// Vault to store reward tokens.
     pub reward_vault: Pubkey,
     /// The last time reward states were updated.
@@ -45,21 +47,19 @@ pub struct StakeInfo {
     pub rarity_id: u32, //4
     pub stake_time: i64, //8
     pub last_update_time: i64, //8
-    pub will_delete: u32, //4
     pub is_unstaked: u32, //4
     pub reward: u64, //8
 }
 
 impl StakeInfo {
-    pub fn update_reward(&mut self, now: i64, reward_per_day: u16) -> Result<u64> {
-        let mut reward: u64 = 0;
+    pub fn update_reward(&mut self, now: i64, reward_per_day: u16, reward_decimal: u32) -> Result<u64> {
         let mut last_reward_time = self.last_update_time;
         if last_reward_time < self.stake_time {
             last_reward_time = self.stake_time;
         }
 
-        let unit_amount = (10 as u64).pow(DECIMAL);
-        reward = (unit_amount as u128)
+        let unit_amount = (10 as u64).pow(reward_decimal);
+        let reward = (unit_amount as u128)
             .checked_mul((now as u128).checked_sub(last_reward_time as u128).unwrap())
             .unwrap()
             .checked_mul(reward_per_day as u128)
@@ -69,7 +69,6 @@ impl StakeInfo {
             .checked_div(DAY as u128)
             .unwrap() as u64;
         // reward = (((now - last_reward_time) / DAY) as u64) * reward_per_day;
-        self.last_update_time = now;
 
         Ok(reward)
     }

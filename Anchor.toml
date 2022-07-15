@@ -1,16 +1,16 @@
 [features]
 seeds = false
 [programs.localnet]
-snug_squad = "53s2V3Kf3kvweqvHUTeKbAVeKVrZoK331QG58VczG6i5"
+snug_squad = "2dw47d5KvhgyiKtAhJhJGn2d3RbfqD1QBk6qZT8NERbg"
 
 [programs.devnet]
-snug_squad = "53s2V3Kf3kvweqvHUTeKbAVeKVrZoK331QG58VczG6i5"
+snug_squad = "2dw47d5KvhgyiKtAhJhJGn2d3RbfqD1QBk6qZT8NERbg"
 
 [registry]
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "/root/.config/solana/id.json"
 
 [scripts]

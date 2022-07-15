@@ -13,7 +13,7 @@ use account::*;
 use constants::*;
 use error::*;
 
-declare_id!("53s2V3Kf3kvweqvHUTeKbAVeKVrZoK331QG58VczG6i5");
+declare_id!("2dw47d5KvhgyiKtAhJhJGn2d3RbfqD1QBk6qZT8NERbg");
 
 #[program]
 pub mod snug_squad {
@@ -22,7 +22,8 @@ pub mod snug_squad {
     pub fn initialize(ctx: Context<Initialize>,
         reward_policy_by_class: [u16; CLASS_TYPES],
         lock_day_by_class: [u16; CLASS_TYPES],
-        reward_by_rarity: [u16; RARITY_TYPES],) -> Result<()> {
+        reward_by_rarity: [u16; RARITY_TYPES],
+        reward_decimal: u32,) -> Result<()> {
         msg!("initializing");
 
         let pool_account = &mut ctx.accounts.pool_account;
@@ -31,6 +32,7 @@ pub mod snug_squad {
         pool_account.admin = *ctx.accounts.admin.key;
         pool_account.paused = false; // initial status is paused
         pool_account.reward_mint = *ctx.accounts.reward_mint.to_account_info().key;
+        pool_account.reward_decimal = reward_decimal;
         pool_account.reward_vault = ctx.accounts.reward_vault.key();
         pool_account.last_update_time = Clock::get()?.unix_timestamp;
         pool_account.staked_nft = 0;
@@ -81,7 +83,7 @@ pub mod snug_squad {
             .stake_time
             .checked_add(
                 (pool_account.lock_day_by_class[staking_info.class_id as usize] as i64)
-                    .checked_mul(86400 as i64)
+                    .checked_mul(DAY as i64)
                     .unwrap(),
             )
             .unwrap();
@@ -95,7 +97,7 @@ pub mod snug_squad {
 
         let reward_per_day = pool_account.get_reward_per_day(reward_class_id as u8, staking_info.rarity_id as u8)?;
         // When withdraw nft, calculate and send rewards
-        let mut reward: u64 = staking_info.update_reward(timestamp, reward_per_day)?;
+        let reward: u64 = staking_info.update_reward(timestamp, reward_per_day, pool_account.reward_decimal)?;
 
         // for reward later
         staking_info.is_unstaked = 1;
@@ -111,22 +113,20 @@ pub mod snug_squad {
         let timestamp = Clock::get()?.unix_timestamp;
         let staking_info = &mut ctx.accounts.nft_stake_info_account;
 
-        require!(staking_info.is_unstaked == 1, StakingError::NotUnstaked);
-
         // calulate reward of this nft
         let pool_account = &mut ctx.accounts.pool_account;
         let reward_per_day = pool_account.get_reward_per_day(staking_info.class_id as u8, staking_info.rarity_id as u8)?;
         // When withdraw nft, calculate and send reward SWRD
-        let mut reward: u64 = staking_info.update_reward(timestamp, reward_per_day)?;
+        let mut reward: u64 = staking_info.update_reward(timestamp, reward_per_day, pool_account.reward_decimal)?;
+        staking_info.last_update_time = timestamp;
 
         if staking_info.is_unstaked == 1 {
             reward = staking_info.reward;
-            staking_info.is_unstaked = 0;
         } else {
-            let vault_balance = ctx.accounts.reward_vault.amount;
-            if vault_balance < reward {
-                reward = vault_balance;
-            }
+            // let vault_balance = ctx.accounts.reward_vault.amount;
+            // if vault_balance < reward {
+            //     reward = vault_balance;
+            // }
         }
 
         // Transfer rewards from the pool reward vaults to user reward vaults.
@@ -220,6 +220,10 @@ pub mod snug_squad {
     pub fn transfer_ownership(ctx: Context<TransferOwnership>, new_admin: Pubkey) -> Result<()> {
         let pool_account = &mut ctx.accounts.pool_account;
         pool_account.admin = new_admin;
+        Ok(())
+    }
+
+    pub fn close_stake_info(_ctx: Context<CloseStakeInfo>) -> Result<()> {
         Ok(())
     }
 }
@@ -383,6 +387,25 @@ pub struct ClaimReward<'info> {
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
+
+
+#[derive(Accounts)]
+pub struct CloseStakeInfo<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [RS_STAKEINFO_SEED.as_ref(), nft_mint.key().as_ref()],
+        bump,
+        constraint = nft_stake_info_account.owner == owner.key(),
+        close = owner,
+    )]
+    pub nft_stake_info_account: Account<'info, StakeInfo>,
+
+    pub nft_mint: Account<'info, Mint>,
+}
+
 
 #[derive(Accounts)]
 pub struct DepositReward<'info> {
