@@ -158,7 +158,7 @@ describe("snug-squad", () => {
 
     console.log("vault_key =", vault_pda.toBase58());
 
-    const res = await program.methods.initialize(class_types, lock_day_by_class, reward_by_class).accounts({
+    const res = await program.methods.initialize(class_types, lock_day_by_class, reward_by_class, 9).accounts({
       admin: superOwner.publicKey,
       poolAccount: pool_account_pda,
       rewardMint: reward_mint.publicKey,
