@@ -12,6 +12,7 @@ const RS_PREFIX = "snuggle-squad-nft-staking";
 const RS_STAKEINFO_SEED = "snuggle-squad-stake-info";
 const RS_STAKE_SEED = "snuggle-squad-nft-staking";
 const RS_VAULT_SEED = "snuggle-squad-vault";
+const USER_STATE_SEED = "snuggle-squad-user-state";
 
 describe("snug-squad", () => {
   
@@ -237,16 +238,20 @@ describe("snug-squad", () => {
       program.programId
     );
 
+    const [userStatePk, __bump] = await PublicKey.findProgramAddress(
+      [
+        Buffer.from(USER_STATE_SEED),
+        user.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
     const ix = await program.methods.stakeNft(0, 0).accounts({
       owner: user.publicKey,
       poolAccount: pool_account_pda,
-      nftMint: nft_token_mint.publicKey,
-      userNftTokenAccount: user_nft_token_account,
-      destNftTokenAccount: staked_nft_pda,
+      userState: userStatePk,
       nftStakeInfoAccount: stake_info_pda,
-      rent: SYSVAR_RENT_PUBKEY,
-      systemProgram: SystemProgram.programId,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      nftMint: nft_token_mint.publicKey,
     })
       .signers([user])
       .rpc();
@@ -257,13 +262,6 @@ describe("snug-squad", () => {
     assert.ok(_stakeinfo.nftAddr.equals(nft_token_mint.publicKey));
     console.log("class_id: ", _stakeinfo.classId);
     console.log("stake_time : ", _stakeinfo.stakeTime);
-
-    let _destNftTokenAccount = await nft_token_mint.getAccountInfo(staked_nft_pda);
-    // assert.ok(Number(_destNftTokenAccount.amount) == 1);
-
-    let _user_nft_token_account = await nft_token_mint.getAccountInfo(user_nft_token_account);
-    // assert.ok(Number(_user_nft_token_account.amount) == 0);
-
   })
 
   it("Withdraw Nft", async () => {
@@ -316,9 +314,17 @@ describe("snug-squad", () => {
 
     // console.log(await provider.connection.simulateTransaction(tx, [user]));
 
+    const [userStatePk, __bump] = await PublicKey.findProgramAddress(
+      [
+        Buffer.from(USER_STATE_SEED),
+        user.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
     const ix = await program.methods.withdrawNft().accounts({
       owner: user.publicKey,
       poolAccount: pool_account_pda,
+      userState: userStatePk,
       nftStakeInfoAccount: stake_info_pda,
       nftMint: nft_token_mint.publicKey,
     })
@@ -354,6 +360,10 @@ describe("snug-squad", () => {
       ],
       program.programId
     );
+
+    if (!await provider.connection.getAccountInfo(stake_info_pda)) {
+      return;
+    }
 
     let _user_reward_account = await reward_mint.getAccountInfo(user_reward_account);
     console.log("reward amount1111: ", Number(_user_reward_account.amount));

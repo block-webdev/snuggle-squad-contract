@@ -13,7 +13,7 @@ use account::*;
 use constants::*;
 use error::*;
 
-declare_id!("2dw47d5KvhgyiKtAhJhJGn2d3RbfqD1QBk6qZT8NERbg");
+declare_id!("41dEpuTriLhSyqL4HUAtEgzJ2eF4M5USxKW2xgMTaFZ5");
 
 #[program]
 pub mod snug_squad {
@@ -43,9 +43,11 @@ pub mod snug_squad {
         Ok(())
     }
 
-
     pub fn stake_nft(ctx: Context<StakeNft>, class_id: u32, rarity_id: u32) -> Result<()> {
         let timestamp = Clock::get()?.unix_timestamp;
+
+        // set user state key
+        ctx.accounts.user_state.user = ctx.accounts.owner.key();
 
         // set stake info
         let staking_info = &mut ctx.accounts.nft_stake_info_account;
@@ -56,20 +58,10 @@ pub mod snug_squad {
         staking_info.class_id = class_id;
         staking_info.rarity_id = rarity_id;
         staking_info.is_unstaked = 0;
-        staking_info.reward = 0;
 
         // set global info
         ctx.accounts.pool_account.staked_nft += 1;
 
-        // transfer nft to pda
-        // let cpi_accounts = Transfer {
-        //     from: ctx.accounts.user_nft_token_account.to_account_info(),
-        //     to: ctx.accounts.dest_nft_token_account.to_account_info(),
-        //     authority: ctx.accounts.owner.to_account_info(),
-        // };
-        // let token_program = ctx.accounts.token_program.to_account_info();
-        // let transfer_ctx = CpiContext::new(token_program, cpi_accounts);
-        // token::transfer(transfer_ctx, 1)?;
         Ok(())
     }
 
@@ -101,7 +93,8 @@ pub mod snug_squad {
 
         // for reward later
         staking_info.is_unstaked = 1;
-        staking_info.reward = reward;
+
+        ctx.accounts.user_state.pending_reward += reward;
 
         ctx.accounts.pool_account.staked_nft -= 1;
 
@@ -117,11 +110,11 @@ pub mod snug_squad {
         let pool_account = &mut ctx.accounts.pool_account;
         let reward_per_day = pool_account.get_reward_per_day(staking_info.class_id as u8, staking_info.rarity_id as u8)?;
         // When withdraw nft, calculate and send reward SWRD
-        let mut reward: u64 = staking_info.update_reward(timestamp, reward_per_day, pool_account.reward_decimal)?;
+        let reward: u64 = staking_info.update_reward(timestamp, reward_per_day, pool_account.reward_decimal)?;
         staking_info.last_update_time = timestamp;
 
         if staking_info.is_unstaked == 1 {
-            reward = staking_info.reward;
+            // reward = staking_info.reward;
         } else {
             // let vault_balance = ctx.accounts.reward_vault.amount;
             // if vault_balance < reward {
@@ -148,6 +141,35 @@ pub mod snug_squad {
             reward
         );
         anchor_spl::token::transfer(cpi_ctx.with_signer(signer), reward)?;
+
+        Ok(())
+    }
+
+    pub fn claim_pending_reward(ctx: Context<ClaimPendingReward>) -> Result<()> {
+        let pending_reward = ctx.accounts.user_state.pending_reward;
+        if pending_reward > 0 {
+            ctx.accounts.user_state.pending_reward = 0;
+
+            // Transfer rewards from the pool reward vaults to user reward vaults.
+            let (_pool_account_seed, _bump) =
+                Pubkey::find_program_address(&[RS_PREFIX.as_bytes()], ctx.program_id);
+            // let bump = ctx.bumps.get(RS_PREFIX).unwrap();
+            let pool_seeds = &[RS_PREFIX.as_bytes(), &[_bump]];
+            let signer = &[&pool_seeds[..]];
+
+            let token_program = ctx.accounts.token_program.to_account_info().clone();
+            let token_accounts = anchor_spl::token::Transfer {
+                from: ctx.accounts.reward_vault.to_account_info().clone(),
+                to: ctx.accounts.reward_to_account.to_account_info().clone(),
+                authority: ctx.accounts.pool_account.to_account_info().clone(),
+            };
+            let cpi_ctx = CpiContext::new(token_program, token_accounts);
+            msg!(
+                "Calling the token program to transfer reward {} to the user",
+                pending_reward
+            );
+            anchor_spl::token::transfer(cpi_ctx.with_signer(signer), pending_reward)?;
+        }
 
         Ok(())
     }
@@ -268,7 +290,6 @@ pub struct Initialize<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-
 #[derive(Accounts)]
 // #[instruction(global_bump: u8, staked_nft_bump: u8)]
 pub struct StakeNft<'info> {
@@ -284,18 +305,15 @@ pub struct StakeNft<'info> {
     )]
     pub pool_account: Account<'info, PoolConfig>,
 
-    #[account(mut)]
-    pub user_nft_token_account: Account<'info, TokenAccount>,
-
     #[account(
         init_if_needed,
         payer = owner,
-        seeds = [RS_STAKE_SEED.as_ref(), nft_mint.key.as_ref()],
+        seeds = [USER_STATE_SEED, owner.key().as_ref()],
         bump,
-        token::mint = nft_mint,
-        token::authority = pool_account,
+        space = 8 + size_of::<UserState>(),
     )]
-    pub dest_nft_token_account: Account<'info, TokenAccount>,
+    pub user_state: Account<'info, UserState>,
+
     #[account(
         init_if_needed,
         payer = owner,
@@ -308,8 +326,6 @@ pub struct StakeNft<'info> {
     /// CHECK: unsafe
     pub nft_mint: AccountInfo<'info>,
 
-    pub token_program: Program<'info, Token>,
-    // pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
@@ -328,12 +344,20 @@ pub struct WithdrawNft<'info> {
     )]
     pub pool_account: Account<'info, PoolConfig>,
 
+    #[account(
+        mut,
+        seeds = [USER_STATE_SEED, owner.key().as_ref()],
+        bump,
+    )]
+    pub user_state: Account<'info, UserState>,
+
     pub nft_mint: Account<'info, Mint>,
 
     #[account(
         mut,
         seeds = [RS_STAKEINFO_SEED.as_ref(), nft_mint.key().as_ref()],
         bump,
+        close = owner,
     )]
     pub nft_stake_info_account: Account<'info, StakeInfo>,
 }
@@ -380,6 +404,53 @@ pub struct ClaimReward<'info> {
     reward_to_account: Box<Account<'info, TokenAccount>>,
 
     pub nft_mint: Account<'info, Mint>,
+
+    // The Token Program
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimPendingReward<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [RS_PREFIX.as_bytes()],
+        bump,
+        constraint = pool_account.is_initialized == true,
+        constraint = pool_account.paused == false,
+    )]
+    pub pool_account: Account<'info, PoolConfig>,
+
+    #[account(
+        mut,
+        seeds = [USER_STATE_SEED, owner.key().as_ref()],
+        bump,
+    )]
+    pub user_state: Account<'info, UserState>,
+
+    #[account(
+        mut,
+        token::mint = reward_mint,
+        token::authority = pool_account,
+    )]
+    reward_vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(address = pool_account.reward_mint)]
+    pub reward_mint: Account<'info, Mint>,
+
+    // send reward to user reward vault
+    #[account(
+      init_if_needed,
+      payer = owner,
+      associated_token::mint = reward_mint,
+      associated_token::authority = owner
+    )]
+    reward_to_account: Box<Account<'info, TokenAccount>>,
 
     // The Token Program
     pub associated_token_program: Program<'info, AssociatedToken>,
