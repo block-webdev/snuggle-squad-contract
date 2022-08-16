@@ -13,7 +13,7 @@ use account::*;
 use constants::*;
 use error::*;
 
-declare_id!("41dEpuTriLhSyqL4HUAtEgzJ2eF4M5USxKW2xgMTaFZ5");
+declare_id!("2FkXuxdBuEPqg5K2doi3hEKLvN9Eabben71cuzpwHvvT");
 
 #[program]
 pub mod snug_squad {
@@ -65,8 +65,42 @@ pub mod snug_squad {
         Ok(())
     }
 
-    #[access_control(is_admin_user(&ctx.accounts.pool_account, &ctx.accounts.nft_stake_info_account, &ctx.accounts.owner))]
     pub fn withdraw_nft(ctx: Context<WithdrawNft>) -> Result<()> {
+        let timestamp = Clock::get()?.unix_timestamp;
+        let staking_info = &mut ctx.accounts.nft_stake_info_account;
+        let pool_account = &mut ctx.accounts.pool_account;
+
+        let unlock_time = staking_info
+            .stake_time
+            .checked_add(
+                (pool_account.lock_day_by_class[staking_info.class_id as usize] as i64)
+                    .checked_mul(DAY as i64)
+                    .unwrap(),
+            )
+            .unwrap();
+
+        require!((unlock_time < timestamp), StakingError::InvalidWithdrawTime);
+
+        let mut reward_class_id = 0;
+        if unlock_time < timestamp {
+            reward_class_id = staking_info.class_id;
+        }
+
+        let reward_per_day = pool_account.get_reward_per_day(reward_class_id as u8, staking_info.rarity_id as u8)?;
+        // When withdraw nft, calculate and send rewards
+        let reward: u64 = staking_info.update_reward(timestamp, reward_per_day, pool_account.reward_decimal)?;
+
+        // for reward later
+        staking_info.is_unstaked = 1;
+
+        ctx.accounts.user_state.pending_reward += reward;
+
+        ctx.accounts.pool_account.staked_nft -= 1;
+
+        Ok(())
+    }
+
+    pub fn admin_withdraw_nft(ctx: Context<AdminWithdrawNft>) -> Result<()> {
         let timestamp = Clock::get()?.unix_timestamp;
         let staking_info = &mut ctx.accounts.nft_stake_info_account;
         let pool_account = &mut ctx.accounts.pool_account;
@@ -357,7 +391,39 @@ pub struct WithdrawNft<'info> {
         mut,
         seeds = [RS_STAKEINFO_SEED.as_ref(), nft_mint.key().as_ref()],
         bump,
+        has_one = owner,
         close = owner,
+    )]
+    pub nft_stake_info_account: Account<'info, StakeInfo>,
+}
+
+#[derive(Accounts)]
+pub struct AdminWithdrawNft<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [RS_PREFIX.as_bytes()],
+        bump,
+        has_one = admin,
+    )]
+    pub pool_account: Account<'info, PoolConfig>,
+
+    #[account(
+        mut,
+        seeds = [USER_STATE_SEED, nft_stake_info_account.owner.as_ref()],
+        bump,
+    )]
+    pub user_state: Account<'info, UserState>,
+
+    pub nft_mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [RS_STAKEINFO_SEED.as_ref(), nft_mint.key().as_ref()],
+        bump,
+        close = admin,
     )]
     pub nft_stake_info_account: Account<'info, StakeInfo>,
 }
@@ -611,14 +677,6 @@ pub fn user(stake_info_account: &Account<StakeInfo>, user: &AccountInfo) -> Resu
     require!(
         stake_info_account.owner == *user.key,
         StakingError::InvalidUserAddress
-    );
-    Ok(())
-}
-
-pub fn is_admin_user(pool_info_account: &Account<PoolConfig>, stake_info_account: &Account<StakeInfo>, user: &AccountInfo) -> Result<()> {
-    require!(
-        pool_info_account.admin == *user.key || stake_info_account.owner == *user.key,
-        StakingError::InvalidAdminOrAddress
     );
     Ok(())
 }
