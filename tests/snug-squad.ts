@@ -8,11 +8,11 @@ import { assert } from "chai";
 const PublicKey = anchor.web3.PublicKey;
 
 const SWRD_DECIMAL = 9;
-const RS_PREFIX = "snuggle-squad-nft-staking";
-const RS_STAKEINFO_SEED = "snuggle-squad-stake-info";
-const RS_STAKE_SEED = "snuggle-squad-nft-staking";
-const RS_VAULT_SEED = "snuggle-squad-vault";
-const USER_STATE_SEED = "snuggle-squad-user-state";
+const RS_PREFIX = "SS_NFT_STAKING";
+const RS_STAKEINFO_SEED = "SS_STAKE_INFO";
+const RS_STAKE_SEED = "SS_NFT_STAKING";
+const RS_VAULT_SEED = "SS_VAULT";
+const USER_STATE_SEED = "SS_USER_STATE";
 
 describe("snug-squad", () => {
   
